@@ -1,6 +1,7 @@
 import * as d3 from "d3";
 import _ from "lodash";
 import tilebelt from "@mapbox/tilebelt";
+import * as turf from '@turf/turf'
 import mapboxgl from 'mapbox-gl';
 import dataRaw from './data.js';
 
@@ -37,14 +38,23 @@ function filterToDate(collection, date) {
 
 function incrementMappedDay(map, featCollection, sortedDays, ix) {
   const want = ix%sortedDays.length;
-    const toSet = filterToDate(featCollection, sortedDays[want]);
-    map.getSource("resultSource").setData(toSet);
-    document.getElementById("date").innerText = sortedDays[want];
+  const toSet = filterToDate(featCollection, sortedDays[want]);
+  map.getSource("resultSource").setData(toSet);
 
-    // trigger the loop
-    setTimeout(() => {
-      incrementMappedDay(map, featCollection, sortedDays, ix+1);
-    }, 1000);
+  // update names
+  _.map(document.getElementsByClassName("date"), d => {
+    const date = sortedDays[want];
+    if (d.innerText == date.slice(5)) {
+      d.className = "date live";
+    } else {
+      d.className = "date";
+    }
+  });
+
+  // trigger the loop
+  setTimeout(() => {
+    incrementMappedDay(map, featCollection, sortedDays, ix+1);
+  }, 1000);
 }
 
 function makeLegend(denominator) {
@@ -61,8 +71,28 @@ function makeLegend(denominator) {
     d.appendChild(s2);
 
     l.appendChild(d);
-  })
-  
+  }) 
+}
+
+function boundsToPolygon(bounds) {
+  return [[
+    [bounds[0], bounds[1]],
+    [bounds[2], bounds[1]],
+    [bounds[2], bounds[3]],
+    [bounds[0], bounds[3]],
+    [bounds[0], bounds[1]],
+  ]]
+}
+
+function makeFeature(geomType, props, coords) {
+  return {
+    "type": "Feature",
+    "properties": props,
+    "geometry": {
+      "type": geomType,
+      "coordinates": coords,
+    },
+  }
 }
 
 // set access token
@@ -95,21 +125,8 @@ const scaledFeatures = _.map(parsed, p => {
     "color": d3.interpolateViridis(ratio),
   };
 
-  const b = p.bounds;
-  return {
-    "type": "Feature",
-    "properties": props,
-    "geometry": {
-      "type": "Polygon",
-      "coordinates": [[
-        [b[0], b[1]],
-        [b[2], b[1]],
-        [b[2], b[3]],
-        [b[0], b[3]],
-        [b[0], b[1]],
-      ]],
-    },
-  }
+  const coords = boundsToPolygon(p.bounds);
+  return makeFeature("Polygon", props, coords)
 });
 
 // now that we have denom, make legend
@@ -118,15 +135,28 @@ makeLegend(denominator);
 // get unique days
 const sortedDays = _.sortBy(_.uniq(_.map(parsed, p => p.day)));
 
-const centerMap = [-77.01536178588867, 38.892769750328455];
+// populate list of dates across top
+_.forEach(sortedDays, d => {
+  const newDiv = document.createElement("div");
+  newDiv.className = "date";
+  newDiv.innerText = d.slice(5);
+  const parentD = document.getElementById("dates");
+  parentD.appendChild(newDiv);
+});
+
+const centerMap = [-77.01216459274292, 38.90262264887739];
 const startMapZoom = 13;
 const map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/mapbox/dark-v10',
-    center: centerMap,
-    zoom: startMapZoom
+  container: 'map',
+  style: 'mapbox://styles/mapbox/dark-v10',
+  center: centerMap,
+  zoom: startMapZoom
 });
 map.on('load', () => {
-    generateSourceAndLayer(map);
-    incrementMappedDay(map, makeFeatCollection(scaledFeatures), sortedDays, 0)
-})
+  generateSourceAndLayer(map);
+  const fc = makeFeatCollection(scaledFeatures);
+  const bb = turf.envelope(fc).bbox;
+  const bnds = [[bb[0], bb[1]], [bb[2], bb[3]]]
+  map.fitBounds(bnds);
+  incrementMappedDay(map, fc, sortedDays, 0);
+});
