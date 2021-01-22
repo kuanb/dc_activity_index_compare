@@ -163,7 +163,7 @@ function generateRedCirclesCallout(map) {
 }
 
 // set access token
-mapboxgl.accessToken = "pk.eyJ1Ijoia3VhbmIiLCJhIjoidXdWUVZ2USJ9.qNKXXP6z9_fKA8qrmpOi6Q";
+mapboxgl.accessToken = "pk.eyJ1Ijoia3VhbmJtYiIsImEiOiJja2s4cmlrdHcwcWkyMnZxb211cmNleWNqIn0.zXVchyXMWSrY8j-ju644wA";
 
 // parse raw time series quadkey data
 const parsed = _.map(d3.csvParse(dataRaw), p => {
