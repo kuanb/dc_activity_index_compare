@@ -5,6 +5,20 @@ import * as turf from '@turf/turf'
 import mapboxgl from 'mapbox-gl';
 import dataRaw from './data.js';
 
+// globals
+const STATE = {"is_paused": false, "date_ix": 0};
+
+// set global control
+document.getElementById("pauseplay").onclick = () => {
+  STATE.is_paused = !STATE.is_paused;
+
+  if (!STATE.is_paused) {
+    const fc = makeFeatCollection(scaledFeatures);
+    STATE.date_ix += 1
+    incrementMappedDay(map, fc, sortedDays, STATE.date_ix);
+  }
+}
+
 function generateSourceAndLayer(map) {
   map.addSource('resultSource', {
     'type': 'geojson',
@@ -41,6 +55,15 @@ function incrementMappedDay(map, featCollection, sortedDays, ix) {
   const toSet = filterToDate(featCollection, sortedDays[want]);
   map.getSource("resultSource").setData(toSet);
 
+  // also add circles layer if in certain day timeframe
+  if (["2021-01-05", "2021-01-06", "2021-01-07"].includes(sortedDays[want])) {
+    map.setLayoutProperty("redCircles", "visibility", "visible");
+    map.setLayoutProperty("redCirclesLabel", "visibility", "visible");
+  } else {
+    map.setLayoutProperty("redCircles", "visibility", "none");
+    map.setLayoutProperty("redCirclesLabel", "visibility", "none");
+  }
+
   // update names
   _.map(document.getElementsByClassName("date"), d => {
     const date = sortedDays[want];
@@ -53,7 +76,10 @@ function incrementMappedDay(map, featCollection, sortedDays, ix) {
 
   // trigger the loop
   setTimeout(() => {
-    incrementMappedDay(map, featCollection, sortedDays, ix+1);
+    if (!STATE.is_paused) {
+      STATE.date_ix += 1
+      incrementMappedDay(map, featCollection, sortedDays, STATE.date_ix);
+    }
   }, 1000);
 }
 
@@ -95,8 +121,49 @@ function makeFeature(geomType, props, coords) {
   }
 }
 
+function createCirclesFeatCollection() {
+  // make the 2 circles for the capitol and white house
+  const sar = turf.buffer(turf.point([-77.0365458726883,38.891863716028645]), 750, {units: "meters"});
+  sar.properties.title = "Save America Rally";
+  const cap = turf.buffer(turf.point([-77.01251864433289,38.889788561664936]), 750, {units: "meters"});
+  cap.properties.title = "US Capitol";
+  return makeFeatCollection([sar, cap]);
+}
+
+function generateRedCirclesCallout(map) {
+  map.addSource('redCircles', {
+    'type': 'geojson',
+    'data': createCirclesFeatCollection(),
+  });
+
+  map.addLayer({
+    'id': 'redCircles',
+    'type': 'line',
+    'source': 'redCircles',
+    'paint': {
+      'line-color': 'red',
+      'line-width': 3,
+      'line-opacity': 1,
+    },
+  });
+  
+  map.addLayer({
+    'id': 'redCirclesLabel',
+    'type': 'symbol',
+    'source': 'redCircles',
+    'layout': {
+      'text-field': ['get', 'title'],
+      
+    },
+    'paint': {
+        'text-color': 'red'
+    }
+  });
+
+}
+
 // set access token
-mapboxgl.accessToken = 'pk.eyJ1Ijoia3VhbmIiLCJhIjoidXdWUVZ2USJ9.qNKXXP6z9_fKA8qrmpOi6Q';
+mapboxgl.accessToken = "pk.eyJ1Ijoia3VhbmIiLCJhIjoidXdWUVZ2USJ9.qNKXXP6z9_fKA8qrmpOi6Q";
 
 // parse raw time series quadkey data
 const parsed = _.map(d3.csvParse(dataRaw), p => {
@@ -111,7 +178,8 @@ const parsed = _.map(d3.csvParse(dataRaw), p => {
 });
 
 // convert to a feature collection
-const denominator = _.maxBy(parsed, "sum_activity_index_quadkey")["sum_activity_index_quadkey"];
+// const denominator = _.maxBy(parsed, "sum_activity_index_quadkey")["sum_activity_index_quadkey"];
+const denominator = d3.quantile(_.map(_.sortBy(parsed, p => p.sum_activity_index_quadkey), p => p.sum_activity_index_quadkey), 0.98);
 const scaledFeatures = _.map(parsed, p => {
   const ratio = Math.min(
     Math.max(
@@ -154,9 +222,10 @@ const map = new mapboxgl.Map({
 });
 map.on('load', () => {
   generateSourceAndLayer(map);
+  generateRedCirclesCallout(map);
   const fc = makeFeatCollection(scaledFeatures);
   const bb = turf.envelope(fc).bbox;
   const bnds = [[bb[0], bb[1]], [bb[2], bb[3]]]
   map.fitBounds(bnds);
-  incrementMappedDay(map, fc, sortedDays, 0);
+  incrementMappedDay(map, fc, sortedDays, STATE.date_ix);
 });

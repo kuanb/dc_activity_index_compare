@@ -33,12 +33,25 @@
   	z-index: 100;
   	top: 20px;
   	left: 20px;
+    background-color: black;
+    height: 33px;
+    overflow: hidden;
+  }
+
+  .pauseplay {
+    float: left;
+    padding: 5px 5px 5px 10px;
+    font-size: 10px;
+    line-height: 20px;
+    font-weight: 300;
+    font-family: sans-serif;
+    color: lightgrey;
+    cursor: pointer;
   }
 
   .date {
     float: left;
     padding: 5px 10px;
-    background-color: black;
     font-size: 20px;
     font-weight: 300;
     font-family: sans-serif;
@@ -78,7 +91,9 @@
 </style>
 
 <body>
-  <div class="dates" id="dates"></div>
+  <div class="dates" id="dates">
+    <div class="pauseplay" id="pauseplay">Pause/Play</div>
+  </div>
 
   <div id="legend" class="legend">
     <h4>Activity Index</h4>
